@@ -25,9 +25,9 @@ class BinanceTrader:
 
     def __init__(self, api_key, api_secret, symbol, quantity, max_lot_value, period):
         self.client = Client(api_key, api_secret, testnet=False, tld='com')
-
         self.symbol = symbol
         self.period = period
+        self.quantity = quantity
         self.subset_of_columns = ['open_time','close_time','open','close', 'high','low','volume','number_trades']
         self.socket = f'wss://fstream.binance.com/ws/{symbol.lower()}@kline_{period.lower()}'
         self.last_msg = {}
@@ -72,6 +72,15 @@ class BinanceTrader:
         order = self.client.order_market_sell(symbol=self.symbol,quantity=self.quantity)
         return order
 
+    def features_create_order(self, side):
+        order = client.futures_create_order(
+            symbol=self.symbol,
+            side=side.upper(),
+            type='MARKET',
+            quantity=self.quantity,
+            leverage=10,
+        )
+
     def format_numbers_row(self, row):
         row.open = row.open.astype(float)
         row.close = row.close.astype(float)
@@ -104,11 +113,11 @@ class BinanceTrader:
         current_row = df.iloc[-1]
 
         if (current_row.ema_25 > current_row.ema_50) and (previous_row.ema_25 < previous_row.ema_50):
-            self.place_order_buy(self.client, self.symbol, self.quantity)
-            logging.info('bought' + datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+            self.place_order_buy()
+            print('bought' + datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
         elif (current_row.ema_25 < current_row.ema_50) and (previous_row.ema_25 > previous_row.ema_50):
-            self.place_order_sell(self.client, self.symbol, self.quantity)
-            logging.info('sold' + datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+            self.place_order_sell()
+            print('sold' + datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
 
     def on_message(self, ws, message):
         try:
@@ -127,18 +136,20 @@ class BinanceTrader:
             logging.error(f'Error {e} while on_mesage()')
             ws.close()
 
-    def on_error(self, ws, err):
+    def on_error(ws, err):
         logging.error(err)
         ws.close()
 
-    def on_close(self, ws, close_status_code, close_msg):
+    def on_close(ws, close_status_code, close_msg):
         logging.info('### closed ###')
         ws.run_forever()
 
-    def on_open(self, ws):
+    def on_open(ws):
+        print('### opened ###')
         logging.info('### opened ###')
 
     def run_forever(self):
+        print('running')
         ws = websocket.WebSocketApp(self.socket,
             on_open=self.on_open,
             on_error=self.on_error,
